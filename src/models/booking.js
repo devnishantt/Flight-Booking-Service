@@ -40,7 +40,7 @@ Booking.init(
       allowNull: false,
       defaultValue: BookingStatus.PENDING,
     },
-    seatNumber: {
+    seatNumbers: {
       type: DataTypes.JSON,
       allowNull: true,
       comment: "Array of seat number assigned",

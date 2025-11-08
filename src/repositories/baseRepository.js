@@ -1,7 +1,7 @@
 import logger from "../config/loggerConfig.js";
 import { AppError, NotFoundError } from "../utils/errors.js";
 
-export class BaseRepository {
+export default class BaseRepository {
   constructor(model) {
     if (!model) throw new Error("Model is required for BaseRepository!");
     this.model = model;

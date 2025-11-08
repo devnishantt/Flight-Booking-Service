@@ -5,6 +5,7 @@ import logger from "./config/loggerConfig.js";
 import errorHandler from "./middlewares/errorHandler.js";
 
 const app = express();
+app.use(express.json());
 
 app.use("/api", apiRouter);
 
