@@ -1,5 +1,5 @@
 import { BookingRepository } from "../repositories/index.js";
-import BookingService from "../service/bookingService.js";
+import BookingService from "../services/bookingService.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
 
