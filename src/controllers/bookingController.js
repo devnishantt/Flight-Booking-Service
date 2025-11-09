@@ -19,3 +19,8 @@ export const getBookings = asyncHandler(async (req, res) => {
   const bookings = await bookingService.getBookings(req.query);
   sendSuccess(res, bookings, "Bookings fetched successfully", 200);
 });
+
+export const makePayment = asyncHandler(async (req, res) => {
+  const booking = await bookingService.makePayment(req.params.id, req.body);
+  sendSuccess(res, booking, "Payment processed successfully", 200);
+});

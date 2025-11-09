@@ -2,6 +2,11 @@ import axios from "axios";
 import { randomBytes } from "crypto";
 import { FLIGHT_URL } from "../config/serverConfig.js";
 import { BookingStatus } from "../utils/enums.js";
+import {
+  ConflictError,
+  InternalServerError,
+  ValidationError,
+} from "../utils/errors.js";
 
 export default class BookingService {
   constructor(bookingRepository) {
@@ -75,5 +80,53 @@ export default class BookingService {
     }
 
     return await this.bookingRepository.findAll({ where });
+  }
+
+  async makePayment(bookingId, paymentData) {
+    const booking = await this.bookingRepository.findById(bookingId);
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new ValidationError(
+        "Cannot process payment for a cancelled booking"
+      );
+    }
+
+    if (booking.status === BookingStatus.COMPLETED) {
+      throw new ConflictError(
+        "Payment has already been processed for this booking"
+      );
+    }
+
+    try {
+      if (paymentData?.amount !== undefined) {
+        const paymentAmount = Number(paymentData.amount);
+        const bookingAmount = Number(booking.totalAmount);
+
+        if (paymentAmount !== bookingAmount) {
+          throw new ValidationError(
+            `Payment amount (${paymentAmount}) does not match booking total (${bookingAmount})`
+          );
+        }
+      }
+
+      // Process payment (simulated)
+      // In production, this would integrate with a payment gateway like Stripe, PayPal, etc.
+      const paymentProcessed = true; // Simulated payment success
+
+      if (!paymentProcessed) {
+        throw new InternalServerError("Payment processing failed");
+      }
+
+      const updatedBooking = await this.bookingRepository.update(booking.id, {
+        status: BookingStatus.COMPLETED,
+      });
+
+      return await this.bookingRepository.findById(booking.id);
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof ConflictError) {
+        throw error;
+      }
+      throw new InternalServerError("Failed to process payment");
+    }
   }
 }
