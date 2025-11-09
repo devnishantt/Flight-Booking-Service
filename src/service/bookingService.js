@@ -5,8 +5,11 @@ import { BookingStatus } from "../utils/enums.js";
 import {
   ConflictError,
   InternalServerError,
+  NotFoundError,
   ValidationError,
 } from "../utils/errors.js";
+import logger from "../config/loggerConfig.js";
+import { Op } from "sequelize";
 
 export default class BookingService {
   constructor(bookingRepository) {
@@ -97,6 +100,15 @@ export default class BookingService {
       );
     }
 
+    if (
+      booking.status !== BookingStatus.PENDING &&
+      booking.status !== BookingStatus.CONFIRMED
+    ) {
+      throw new ValidationError(
+        `Cannot process payment for booking with status: ${booking.status}. Booking must be PENDING or CONFIRMED to process payment.`
+      );
+    }
+
     try {
       if (paymentData?.amount !== undefined) {
         const paymentAmount = Number(paymentData.amount);
@@ -127,6 +139,122 @@ export default class BookingService {
         throw error;
       }
       throw new InternalServerError("Failed to process payment");
+    }
+  }
+
+  async cancelBooking(bookingId) {
+    const booking = await this.bookingRepository.findById(bookingId);
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new ConflictError("Cannot cancel a booking");
+    }
+    if (booking.status === BookingStatus.COMPLETED) {
+      throw new ValidationError(
+        "Cannot cancel a completed booking. Payment has already been processed."
+      );
+    }
+    if (
+      booking.status !== BookingStatus.PENDING &&
+      booking.status !== BookingStatus.CONFIRMED
+    ) {
+      throw new ValidationError(
+        `Cannot cancel booking with status: ${booking.status}. Only PENDING or CONFIRMED booking can be cancelled`
+      );
+    }
+
+    try {
+      await this.bookingRepository.update(booking.id, {
+        status: BookingStatus.CANCELLED,
+      });
+      try {
+        await axios.patch(
+          `${FLIGHT_URL}/api/v1/flight/${booking.flightId}/remaining-seats`,
+          { amount: booking.numberOfSeats }
+        );
+      } catch (error) {
+        logger.error(
+          `Failed to return seats for flight ${booking.flightId}: ${error.message}`
+        );
+      }
+
+      return await this.bookingRepository.findById(booking.id);
+    } catch (error) {
+      if (
+        error instanceof ValidationError ||
+        error instanceof ConflictError ||
+        error instanceof NotFoundError
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerError("Failed to cancel booking");
+    }
+  }
+
+  async cancelOldBookings(hoursOld = 24) {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setHours(cutoffDate.getHours() - hoursOld);
+
+      const oldBookings = await this.bookingRepository.findAll({
+        where: {
+          status: { [Op.in]: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
+          createdAt: { [Op.lt]: cutoffDate },
+        },
+      });
+
+      if (!oldBookings || oldBookings.length === 0) {
+        return { cancelledCount: 0, bookings: [] };
+      }
+
+      const cancelledBookings = [];
+      const errors = [];
+
+      for (const booking of oldBookings) {
+        try {
+          // Update booking status to cancelled
+          await this.bookingRepository.update(booking.id, {
+            status: BookingStatus.CANCELLED,
+          });
+
+          // Return seats to the flight
+          try {
+            await axios.patch(
+              `${FLIGHT_URL}/api/v1/flight/${booking.flightId}/remaining-seats`,
+              { amount: booking.numberOfSeats }
+            );
+          } catch (error) {
+            logger.error(
+              `Failed to return seats for flight ${booking.flightId}: ${error.message}`
+            );
+            errors.push({
+              bookingId: booking.id,
+              error: "Failed to return seats to flight",
+            });
+          }
+
+          const updatedBooking = await this.bookingRepository.findById(
+            booking.id
+          );
+          cancelledBookings.push(updatedBooking);
+        } catch (error) {
+          logger.error(
+            `Failed to cancel booking ${booking.id}: ${error.message}`
+          );
+          errors.push({
+            bookingId: booking.id,
+            error: error.message,
+          });
+        }
+      }
+
+      return {
+        cancelledCount: cancelledBookings.length,
+        bookings: cancelledBookings,
+        errors: errors.length > 0 ? errors : undefined,
+      };
+    } catch (error) {
+      throw new InternalServerError("Failed to cancel old bookings");
     }
   }
 }

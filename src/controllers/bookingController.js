@@ -24,3 +24,19 @@ export const makePayment = asyncHandler(async (req, res) => {
   const booking = await bookingService.makePayment(req.params.id, req.body);
   sendSuccess(res, booking, "Payment processed successfully", 200);
 });
+
+export const cancelBooking = asyncHandler(async (req, res) => {
+  const booking = await bookingService.cancelBooking(req.params.id);
+  sendSuccess(res, booking, "Booking cancelled successfully", 200);
+});
+
+export const cancelOldBooking = asyncHandler(async (req, res) => {
+  const hoursOld = req.query?.hoursOld || 24;
+  const result = await bookingService.cancelOldBookings(hoursOld);
+  sendSuccess(
+    res,
+    result,
+    `${result.cancelledCount} old booking(s) cancelled successfully`,
+    200
+  );
+});

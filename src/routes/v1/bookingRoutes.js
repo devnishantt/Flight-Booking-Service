@@ -1,5 +1,7 @@
 import { Router } from "express";
 import {
+  cancelBooking,
+  cancelOldBooking,
   createBooking,
   getBooking,
   getBookings,
@@ -18,8 +20,14 @@ bookingRouter.post(
   validateRequestBody(createBookingSchema),
   createBooking
 );
-bookingRouter.post("/:id/payment", validateRequestBody(makePaymentSchema), makePayment)
+bookingRouter.post(
+  "/:id/payment",
+  validateRequestBody(makePaymentSchema),
+  makePayment
+);
 bookingRouter.get("/:id", getBooking);
 bookingRouter.get("/", getBookings);
+bookingRouter.post("/cancel-old", cancelOldBooking);
+bookingRouter.patch("/:id/cancel", cancelBooking);
 
 export default bookingRouter;
